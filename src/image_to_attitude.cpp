@@ -2,6 +2,7 @@
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/highgui/highgui.hpp>
+#include <marine_msgs/NavEulerStamped.h>
 
 class AttitudeExtractor
 {
@@ -11,7 +12,8 @@ public:
         ros::NodeHandle nh;
         image_transport::ImageTransport it(nh);
         m_subscriber = it.subscribe("/pano_1/image_raw", 1, &AttitudeExtractor::imageCallback, this);
-        cv::namedWindow("image_to_attitude");
+        m_angle_pub = nh.advertise<marine_msgs::NavEulerStamped>("image_to_attitude/angle", 1);
+        cv::namedWindow("output");
     }
 
 private:
@@ -28,34 +30,56 @@ private:
             return;
         }
         
+        cv::Mat input;
+        cv::resize(cv_ptr->image, input, cv::Size(0,0), 0.5, 0.5);
+        
+        cv::Mat cropped;
+        input(cv::Rect(0,100,input.size().width,input.size().height-325)).copyTo(cropped);
+        
         cv::Mat grey;
-        cv::cvtColor(cv_ptr->image, grey, CV_BGR2GRAY);
+        cv::cvtColor(cropped, grey, CV_BGR2GRAY);
 
         cv::Mat detected_edges;
-        cv::blur(grey, detected_edges, cv::Size(30,30));
-        cv::Canny(detected_edges, detected_edges, 0, 0, 3);
+        cv::Canny(grey, detected_edges, 20, 60, 3);
         
-        std::vector<cv::Vec2f> lines;
-        cv::HoughLines(detected_edges, lines, 1, CV_PI/180.0, 500);
+        std::vector<cv::Vec4i> lines;
+        cv::HoughLinesP(detected_edges, lines, 1, CV_PI/180.0, 80, 150, 10) ;
         std::cerr << lines.size() << " lines" << std::endl;
-        for( size_t i = 0; i < lines.size() && i < 75; i++ )
-        {
-            float rho = lines[i][0], theta = lines[i][1];
-            cv::Point pt1, pt2;
-            double a = cos(theta), b = sin(theta);
-            double x0 = a*rho, y0 = b*rho;
-            pt1.x = cvRound(x0 + 2500*(-b));
-            pt1.y = cvRound(y0 + 2500*(a));
-            pt2.x = cvRound(x0 - 2500*(-b));
-            pt2.y = cvRound(y0 - 2500*(a));
-            cv::line( cv_ptr->image, pt1, pt2, cv::Scalar(0,0,255), 2, cv::LINE_AA);
-        }
         
-        cv::imshow("image_to_attitude", cv_ptr->image);
+        cv::Mat grey_color;
+        cv::cvtColor(grey, grey_color, CV_GRAY2BGR);
+        
+        double sum = 0.0;
+        int count = 0;
+        
+        for(auto l: lines)
+        {
+            cv::line( grey_color, cv::Point(l[0], l[1]), cv::Point(l[2],l[3]), cv::Scalar(0,0,255), 2, cv::LINE_AA);
+            sum += atan2(l[3]-l[1], l[2]-l[0]); 
+            count++;
+        }
+        std::cerr << "avg: " << (180/M_PI)*sum/double(count) << std::endl;
+        
+        marine_msgs::NavEulerStamped nes;
+        nes.header = msg->header;
+        nes.orientation.roll = (180/M_PI)*sum/double(count);
+        m_angle_pub.publish(nes);
+        
+        cv::Mat detected_edges_color;
+        cv::cvtColor(detected_edges, detected_edges_color, CV_GRAY2BGR);
+        
+        cv::Mat output;
+        cv::vconcat(detected_edges_color, grey_color , output);
+        
+        cv::Mat all;
+        cv::vconcat(input,output,all);
+        
+        cv::imshow("output", all);
         cv::waitKey(3);
     }
     
     image_transport::Subscriber m_subscriber;
+    ros::Publisher m_angle_pub;
 };
 
 int main(int argc, char** argv)

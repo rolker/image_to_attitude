@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
     cv_bridge
     std_msgs
     image_transport    
+    marine_msgs
 )
 
 find_package(OpenCV)
