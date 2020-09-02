@@ -55,14 +55,18 @@ private:
         for(auto l: lines)
         {
             cv::line( grey_color, cv::Point(l[0], l[1]), cv::Point(l[2],l[3]), cv::Scalar(0,0,255), 2, cv::LINE_AA);
-            sum += atan2(l[3]-l[1], l[2]-l[0]); 
-            count++;
+            float degs = (180/M_PI)*atan2(l[3]-l[1], l[2]-l[0]);
+            if(degs < 45 && degs > -45)
+            {
+                sum += degs; 
+                count++;
+            }
         }
-        std::cerr << "avg: " << (180/M_PI)*sum/double(count) << std::endl;
+        std::cerr << "avg: " << sum/double(count) << std::endl;
         
         marine_msgs::NavEulerStamped nes;
         nes.header = msg->header;
-        nes.orientation.roll = (180/M_PI)*sum/double(count);
+        nes.orientation.roll = -sum/double(count);
         m_angle_pub.publish(nes);
         
         cv::Mat detected_edges_color;
