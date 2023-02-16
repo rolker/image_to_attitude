@@ -2,7 +2,7 @@
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/highgui/highgui.hpp>
-#include <marine_msgs/NavEulerStamped.h>
+#include <project11_msgs/NavEulerStamped.h>
 
 class AttitudeExtractor
 {
@@ -12,7 +12,7 @@ public:
         ros::NodeHandle nh;
         image_transport::ImageTransport it(nh);
         m_subscriber = it.subscribe("/pano_1/image_raw", 1, &AttitudeExtractor::imageCallback, this);
-        m_angle_pub = nh.advertise<marine_msgs::NavEulerStamped>("image_to_attitude/angle", 1);
+        m_angle_pub = nh.advertise<project11_msgs::NavEulerStamped>("image_to_attitude/angle", 1);
         cv::namedWindow("output");
     }
 
@@ -64,7 +64,7 @@ private:
         }
         std::cerr << "avg: " << sum/double(count) << std::endl;
         
-        marine_msgs::NavEulerStamped nes;
+        project11_msgs::NavEulerStamped nes;
         nes.header = msg->header;
         nes.orientation.roll = -sum/double(count);
         m_angle_pub.publish(nes);
